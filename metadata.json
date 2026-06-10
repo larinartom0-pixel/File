@@ -1,0 +1,6 @@
+{
+  "name": "File Converter",
+  "description": "Convert video, audio and documents locally from one format to another (e.g., mp4 to mp3, m4a to wav, ogg) individually or in bulk via ZIP archives.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
