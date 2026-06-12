@@ -24,6 +24,10 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
 
+    # Цей крок створює пустий файл-заглушку, щоб збірка не падала через помилку Keystore
+    - name: Create fake debug keystore
+      run: touch debug.keystore
+
     - name: Build with Gradle
       run: gradle assembleDebug
 
