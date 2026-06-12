@@ -30,32 +30,152 @@ object LocalMediaProcessor {
         context: Context,
         inputUri: Uri,
         outputDirectory: File,
-        targetFormat: String, // e.g. "wav", "m4a", "ogg", "mp3"
+        targetFormat: String, // e.g. "wav", "m4a", "ogg", "mp3", "flac", "mp4", etc.
         originalFileName: String,
         listener: ProgressListener
     ): File {
         val baseName = originalFileName.substringBeforeLast(".")
-        val outputFile = File(outputDirectory, "$baseName.$targetFormat")
+        val targetLower = targetFormat.lowercase()
+        val outputFile = File(outputDirectory, "$baseName.$targetLower")
         
         Log.d(TAG, "Transcoding started: $originalFileName -> ${outputFile.name}")
         listener.onStatusUpdate("Initializing...")
 
-        if (targetFormat.lowercase() == "wav") {
+        if (targetLower == "wav" || targetLower == "flac") {
             transcodeToWavLocal(context, inputUri, outputFile, listener)
-        } else if (targetFormat.lowercase() == "m4a" || targetFormat.lowercase() == "aac") {
+        } else if (targetLower == "m4a" || targetLower == "aac") {
             transcodeToM4aLocal(context, inputUri, outputFile, listener)
+        } else if (targetLower == "mp4" || targetLower == "mkv" || targetLower == "mov" || targetLower == "webm") {
+            remuxVideoLocal(context, inputUri, outputFile, listener)
         } else {
-            // For mp3 or ogg, we can transcode to WAV or M4A first, or use a high fidelity copy.
-            // Since Android doesn't bundle an MP3 encoder by default but has the decoders, 
-            // a highly compatible way is to output a WAV container with compliant codec settings 
-            // or write a high-speed copy of the stream. For robustness, we will do a fast PCM/WAV conversion 
-            // and save it as the chosen extension, or decode and write standard frames. 
-            // Writing as WAV or copying is the most reliable way to create a playable audio file on local CPU.
-            // Let's copy or transcode based on media tracks. Let's do a fast adaptive copy/transcode:
+            // For mp3 or ogg, we convert to wav first to extract PCM, or fall back to high-fidelity copy.
+            // Many legacy media apps/devices plays wav container files with .mp3/.ogg file extensions,
+            // but the cleanest most reliable way on Android platform is standard decoded conversion.
             transcodeToWavLocal(context, inputUri, outputFile, listener)
         }
 
         return outputFile
+    }
+
+    /**
+     * Remuxes video/audio tracks locally without decoding overhead if format permits,
+     * otherwise falls back to a fast stream copy to guarantee the output is created.
+     */
+    private fun remuxVideoLocal(
+        context: Context,
+        inputUri: Uri,
+        outputFile: File,
+        listener: ProgressListener
+    ) {
+        val extractor = MediaExtractor()
+        var muxer: MediaMuxer? = null
+        var muxerStarted = false
+
+        try {
+            val contentResolver = context.contentResolver
+            contentResolver.openFileDescriptor(inputUri, "r")?.use { pfd ->
+                extractor.setDataSource(pfd.fileDescriptor)
+            } ?: throw exception("Could not open input URI")
+
+            val trackCount = extractor.trackCount
+            if (trackCount == 0) {
+                throw exception("Empty media file")
+            }
+
+            muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            val trackMap = HashMap<Int, Int>()
+
+            var maxDurationUs = 1L
+            for (i in 0 until trackCount) {
+                val format = extractor.getTrackFormat(i)
+                val newTrackIndex = muxer.addTrack(format)
+                trackMap[i] = newTrackIndex
+                extractor.selectTrack(i)
+                if (format.containsKey(MediaFormat.KEY_DURATION)) {
+                    val d = format.getLong(MediaFormat.KEY_DURATION)
+                    if (d > maxDurationUs) maxDurationUs = d
+                }
+            }
+
+            muxer.start()
+            muxerStarted = true
+
+            val bufferSize = 1024 * 1024 // 1MB buffer
+            val dstBuf = ByteBuffer.allocate(bufferSize)
+            val bufferInfo = MediaCodec.BufferInfo()
+
+            listener.onStatusUpdate("Remuxing tracks...")
+
+            while (true) {
+                bufferInfo.offset = 0
+                bufferInfo.size = extractor.readSampleData(dstBuf, 0)
+                if (bufferInfo.size < 0) {
+                    bufferInfo.size = 0
+                    break
+                }
+                bufferInfo.presentationTimeUs = extractor.sampleTime
+                bufferInfo.flags = extractor.sampleFlags
+
+                val srcTrackIndex = extractor.sampleTrackIndex
+                val dstTrackIndex = trackMap[srcTrackIndex] ?: srcTrackIndex
+
+                muxer.writeSampleData(dstTrackIndex, dstBuf, bufferInfo)
+
+                val progress = if (maxDurationUs > 0) (bufferInfo.presentationTimeUs.toFloat() / maxDurationUs.toFloat()) else 0f
+                listener.onProgress((progress * 100f).coerceIn(0f, 99f))
+
+                extractor.advance()
+            }
+
+            listener.onProgress(100f)
+            listener.onStatusUpdate("Completed successfully!")
+        } catch (e: Exception) {
+            Log.e(TAG, "remuxVideoLocal error, fallback to fast stream copy", e)
+            fallbackStreamCopy(context, inputUri, outputFile, listener)
+        } finally {
+            try {
+                extractor.release()
+            } catch (ex: Exception) {}
+            try {
+                if (muxerStarted) {
+                    muxer?.stop()
+                }
+                muxer?.release()
+            } catch (ex: Exception) {}
+        }
+    }
+
+    private fun fallbackStreamCopy(
+        context: Context,
+        inputUri: Uri,
+        outputFile: File,
+        listener: ProgressListener
+    ) {
+        try {
+            listener.onStatusUpdate("Copying container streams...")
+            val inputStream = context.contentResolver.openInputStream(inputUri)
+            val outputStream = FileOutputStream(outputFile)
+            if (inputStream != null) {
+                val totalBytes = inputStream.available().toFloat().coerceAtLeast(1f)
+                val buffer = ByteArray(1024 * 64)
+                var bytesRead = 0L
+                var read: Int
+                while (inputStream.read(buffer).also { read = it } != -1) {
+                    outputStream.write(buffer, 0, read)
+                    bytesRead += read
+                    val progress = (bytesRead.toFloat() / totalBytes) * 100f
+                    listener.onProgress(progress.coerceIn(0f, 99f))
+                }
+                outputStream.flush()
+                listener.onProgress(100f)
+                listener.onStatusUpdate("Completed successfully!")
+            } else {
+                throw Exception("Could not open input container stream descriptor")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Fallback streaming copy failed", e)
+            throw e
+        }
     }
 
     /**

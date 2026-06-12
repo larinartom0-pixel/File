@@ -309,10 +309,15 @@ fun FileConverterScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     val formats = listOf(
-                        "wav" to "WAV LOSSLESS",
-                        "m4a" to "M4A AAC",
-                        "mp3" to "MP3 COMPRESSED",
-                        "ogg" to "OGG VORBIS"
+                        "wav" to "wav",
+                        "m4a" to "m4a",
+                        "mp3" to "mp3",
+                        "ogg" to "ogg",
+                        "flac" to "flac",
+                        "mp4" to "mp4",
+                        "mkv" to "mkv",
+                        "mov" to "mov",
+                        "webm" to "webm"
                     )
                     formats.forEach { (ext, label) ->
                         val isSelected = selectedFormat == ext

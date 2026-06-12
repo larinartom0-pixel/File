@@ -123,6 +123,11 @@ class ConversionViewModel(application: Application) : AndroidViewModel(applicati
             "m4a" -> "audio/mp4"
             "mp3" -> "audio/mpeg"
             "ogg" -> "audio/ogg"
+            "flac" -> "audio/x-flac"
+            "mp4" -> "video/mp4"
+            "mkv" -> "video/x-matroska"
+            "mov" -> "video/quicktime"
+            "webm" -> "video/webm"
             "zip" -> "application/zip"
             else -> "application/octet-stream"
         }
