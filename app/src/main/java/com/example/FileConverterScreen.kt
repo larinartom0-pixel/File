@@ -7,6 +7,12 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -167,7 +173,7 @@ fun FileConverterScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(
-                                text = "ANDROID TRANSCODER",
+                                text = "RETRO CONVERTER",
                                 fontSize = 15.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold,
@@ -274,7 +280,7 @@ fun FileConverterScreen(
             // Retro Tabbed Selector Box (Old Gingerbread UI layout)
             Column(
                 modifier = Modifier
-                    .padding(12.dp)
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
                     .background(RetroPanelBg, shape = RoundedCornerShape(2.dp))
                     .border(1.dp, RetroDividerGray, shape = RoundedCornerShape(2.dp))
                     .padding(12.dp)
@@ -301,12 +307,10 @@ fun FileConverterScreen(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Tab Bar Selector (instead of rounded M3 filter chips)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                // Beautiful 3x3 Grid of Output Formats
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     val formats = listOf(
                         "wav" to "wav",
@@ -319,52 +323,60 @@ fun FileConverterScreen(
                         "mov" to "mov",
                         "webm" to "webm"
                     )
-                    formats.forEach { (ext, label) ->
-                        val isSelected = selectedFormat == ext
-                        Box(
-                            modifier = Modifier
-                                .background(
-                                    if (isSelected) {
-                                        Brush.verticalGradient(
-                                            listOf(Color(0xFF444444), Color(0xFF222222))
-                                        )
-                                    } else {
-                                        Brush.verticalGradient(
-                                            listOf(Color(0xFF333333), Color(0xFF1B1B1B))
-                                        )
-                                    }
-                                )
-                                .border(
-                                    width = 1.dp,
-                                    color = if (isSelected) RetroAccentGreen else RetroDividerGray
-                                )
-                                .clickable { selectedFormat = ext }
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            contentAlignment = Alignment.Center
+                    formats.chunked(3).forEach { rowItems ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = label,
-                                    fontSize = 10.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) RetroAccentGreen else Color.Gray
-                                )
-                                if (isSelected) {
-                                    Spacer(modifier = Modifier.height(3.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .width(20.dp)
-                                            .height(2.dp)
-                                            .background(RetroAccentGreen)
-                                    )
+                            rowItems.forEach { (ext, label) ->
+                                val isSelected = selectedFormat == ext
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .background(
+                                            if (isSelected) {
+                                                Brush.verticalGradient(
+                                                    listOf(Color(0xFF444444), Color(0xFF222222))
+                                                )
+                                            } else {
+                                                Brush.verticalGradient(
+                                                    listOf(Color(0xFF333333), Color(0xFF1B1B1B))
+                                                )
+                                            }
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isSelected) RetroAccentGreen else RetroDividerGray
+                                        )
+                                        .clickable { selectedFormat = ext }
+                                        .padding(vertical = 10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = label.uppercase(),
+                                            fontSize = 10.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSelected) RetroAccentGreen else Color.Gray
+                                        )
+                                        if (isSelected) {
+                                            Spacer(modifier = Modifier.height(3.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(14.dp)
+                                                    .height(2.dp)
+                                                    .background(RetroAccentGreen)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // Section 2 Header
                 Row(
@@ -389,64 +401,56 @@ fun FileConverterScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = "Multi-Core CPU Schedulers [Max 3]:",
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
-                        color = Color.Gray,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    Row {
-                        listOf(1, 2, 3).forEach { index ->
-                            val active = concurrencyLimit == index
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 3.dp)
-                                    .size(34.dp)
-                                    .testTag("cpu_concurrency_$index")
-                                    .background(
-                                        if (active) {
-                                            Brush.verticalGradient(
-                                                listOf(Color(0xFF3A4E1F), Color(0xFF1F2F11))
-                                            )
-                                        } else {
-                                            Brush.verticalGradient(
-                                                listOf(Color(0xFF333333), Color(0xFF222222))
-                                            )
-                                        }
-                                    )
-                                    .border(
-                                        width = 1.dp,
-                                        color = if (active) RetroAccentGreen else RetroDividerGray
-                                    )
-                                    .clickable {
-                                        viewModel.setConcurrencyLimit(index)
-                                    },
-                                contentAlignment = Alignment.Center
+                    listOf(1, 2, 3).forEach { index ->
+                        val active = concurrencyLimit == index
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(38.dp)
+                                .testTag("cpu_concurrency_$index")
+                                .background(
+                                    if (active) {
+                                        Brush.verticalGradient(
+                                            listOf(Color(0xFF3A4E1F), Color(0xFF1F2F11))
+                                        )
+                                    } else {
+                                        Brush.verticalGradient(
+                                            listOf(Color(0xFF333333), Color(0xFF222222))
+                                        )
+                                    }
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = if (active) RetroAccentGreen else RetroDividerGray
+                                )
+                                .clickable {
+                                    viewModel.setConcurrencyLimit(index)
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = index.toString(),
-                                        color = if (active) RetroAccentGreen else Color.DarkGray,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontSize = 11.sp
-                                    )
-                                    // A small retro "LED green light" on selector
-                                    Box(
-                                        modifier = Modifier
-                                            .padding(top = 2.dp)
-                                            .size(5.dp)
-                                            .background(
-                                                if (active) RetroAccentGreen else Color.DarkGray.copy(alpha = 0.5f),
-                                                shape = CircleShape
-                                            )
-                                    )
-                                }
+                                Text(
+                                    text = "$index CPU",
+                                    color = if (active) RetroAccentGreen else Color.DarkGray,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 11.sp
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .background(
+                                            if (active) RetroAccentGreen else Color.DarkGray.copy(alpha = 0.5f),
+                                            shape = CircleShape
+                                        )
+                                )
                             }
                         }
                     }
@@ -459,18 +463,46 @@ fun FileConverterScreen(
                     fontFamily = FontFamily.Monospace,
                     color = Color.Gray
                 )
+            }
 
-                Spacer(modifier = Modifier.height(16.dp))
+            // Dedicated physical command deck panel for loading media files (Fills up empty space masterfully)
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 12.dp, vertical = 2.dp)
+                    .background(RetroPanelBg, shape = RoundedCornerShape(2.dp))
+                    .border(1.dp, RetroDividerGray, shape = RoundedCornerShape(2.dp))
+                    .padding(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(RetroAccentOrange)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "3. CONSOLE DECK CONTROL ACTIONS",
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
 
-                // Beautiful beveled Retro action controls: "Add Files" & "Process ZIP"
+                Spacer(modifier = Modifier.height(10.dp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Beveled button 1
+                    // Beveled button 1 - ADD FILES
                     Box(
                         modifier = Modifier
                             .weight(1f)
+                            .height(54.dp)
                             .testTag("select_files_button")
                             .background(
                                 Brush.verticalGradient(
@@ -480,7 +512,6 @@ fun FileConverterScreen(
                             )
                             .border(BorderStroke(1.dp, Color(0xFF1A1A1A)))
                             .drawBehind {
-                                // Light source overlay at top
                                 drawLine(
                                     color = Color(0xFF888888),
                                     start = Offset(0f, 0f),
@@ -494,8 +525,7 @@ fun FileConverterScreen(
                                     strokeWidth = 3f
                                 )
                             }
-                            .clickable { fileLauncher.launch(arrayOf("audio/*", "video/*")) }
-                            .padding(vertical = 12.dp),
+                            .clickable { fileLauncher.launch(arrayOf("audio/*", "video/*")) },
                         contentAlignment = Alignment.Center
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -516,10 +546,11 @@ fun FileConverterScreen(
                         }
                     }
 
-                    // Beveled button 2
+                    // Beveled button 2 - UNPACK ZIP
                     Box(
                         modifier = Modifier
                             .weight(1.1f)
+                            .height(54.dp)
                             .testTag("select_zip_button")
                             .background(
                                 Brush.verticalGradient(
@@ -529,7 +560,6 @@ fun FileConverterScreen(
                             )
                             .border(BorderStroke(1.dp, Color(0xFF1A1A1A)))
                             .drawBehind {
-                                // Light source overlay at top
                                 drawLine(
                                     color = Color(0xFF888888),
                                     start = Offset(0f, 0f),
@@ -543,8 +573,7 @@ fun FileConverterScreen(
                                     strokeWidth = 3f
                                 )
                             }
-                            .clickable { zipLauncher.launch(arrayOf("application/zip")) }
-                            .padding(vertical = 12.dp),
+                            .clickable { zipLauncher.launch(arrayOf("application/zip")) },
                         contentAlignment = Alignment.Center
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -556,7 +585,7 @@ fun FileConverterScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                "UNPACK ZIP ARCHIVE",
+                                "UNPACK ZIP FILE",
                                 fontSize = 11.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold,
@@ -566,6 +595,8 @@ fun FileConverterScreen(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Queue List header bar
             Box(
@@ -606,31 +637,10 @@ fun FileConverterScreen(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.TopCenter
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            "/* Empty Transcoding Queue */",
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Gray
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            "Insert media files above to feed local multi-threaded encoders. Supports audio/video. Non-network processing guarantees absolute terminal privacy.",
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace,
-                            color = Color.DarkGray,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 14.sp
-                        )
-                    }
+                    RetroOscilloscopeMonitor()
                 }
             } else {
                 LazyColumn(
@@ -1483,5 +1493,146 @@ private fun getFolderDisplayName(context: Context, uriString: String?): String {
         }
     } catch (e: Exception) {
         "Custom Storage Folder"
+    }
+}
+
+@Composable
+fun RetroOscilloscopeMonitor() {
+    val infiniteTransition = rememberInfiniteTransition(label = "oscilloscope")
+    val phase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 2f * Math.PI.toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "phase"
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(14.dp)
+            .background(Color.Black, shape = RoundedCornerShape(3.dp))
+            .border(2.dp, Color(0xFF333333), shape = RoundedCornerShape(3.dp))
+            .padding(10.dp)
+    ) {
+        // CRT screen line & status info
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "SYSTEM TERMINAL MONITOR [ONLINE]",
+                fontSize = 9.sp,
+                fontFamily = FontFamily.Monospace,
+                color = RetroAccentGreen,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                "DECKS STATUS: STANDBY",
+                fontSize = 9.sp,
+                fontFamily = FontFamily.Monospace,
+                color = RetroAccentOrange,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Canvas doing grid and custom sine wave
+        androidx.compose.foundation.Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(130.dp)
+                .background(Color(0xFF071407))
+                .border(1.dp, Color(0xFF1B3B1B))
+        ) {
+            val width = size.width
+            val height = size.height
+
+            // 1. Draw subtle radar/CRT grid lines
+            val gridSpacing = 20.dp.toPx()
+            val gridColor = Color(0xFF132F13)
+            
+            // Vertical grid lines
+            var x = 0f
+            while (x < width) {
+                drawLine(
+                    color = gridColor,
+                    start = Offset(x, 0f),
+                    end = Offset(x, height),
+                    strokeWidth = 1f
+                )
+                x += gridSpacing
+            }
+            
+            // Horizontal grid lines
+            var y = 0f
+            while (y < height) {
+                drawLine(
+                    color = gridColor,
+                    start = Offset(0f, y),
+                    end = Offset(width, y),
+                    strokeWidth = 1f
+                )
+                y += gridSpacing
+            }
+
+            // Draw center axis lines slightly brighter
+            drawLine(
+                color = Color(0xFF1F4A1F),
+                start = Offset(width / 2f, 0f),
+                end = Offset(width / 2f, height),
+                strokeWidth = 1.5f
+            )
+            drawLine(
+                color = Color(0xFF1F4A1F),
+                start = Offset(0f, height / 2f),
+                end = Offset(width, height / 2f),
+                strokeWidth = 1.5f
+            )
+
+            // 2. Draw animated oscilloscope sine-wave path
+            val points = mutableListOf<Offset>()
+            val centerY = height / 2f
+            val amplitude = 25.dp.toPx()
+            val frequency = 0.02f // wave frequency
+
+            for (px in 0 until width.toInt() step 2) {
+                val fx = px.toFloat()
+                // A complex retro sine-wave formula mixing two wavelengths
+                val fy = centerY + 
+                        amplitude * kotlin.math.sin(fx * frequency + phase) + 
+                        (amplitude * 0.3f) * kotlin.math.sin(fx * frequency * 2.5f - phase * 1.5f)
+                points.add(Offset(fx, fy))
+            }
+
+            // Draw the line points
+            for (i in 0 until points.size - 1) {
+                drawLine(
+                    color = RetroAccentGreen,
+                    start = points[i],
+                    end = points[i + 1],
+                    strokeWidth = 2.5f,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // System Diagnostic Tips
+        Text(
+            text = "/* IDLE ENCODERS READOUT */\n" +
+                   "No active container streams detected in JVM scheduler.\n" +
+                   "Awaiting high-speed offline input. Add tracks using \"ADD FILES\" or import zipped folders for batch transcoding. All conversions utilize multi-core parallel engines on native physical partitions under strict sandboxed environment.",
+            fontSize = 9.sp,
+            fontFamily = FontFamily.Monospace,
+            color = Color.Gray,
+            lineHeight = 12.sp,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
